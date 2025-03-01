@@ -17,6 +17,7 @@ import com.example.authenticationBasedProfile.repository.UserRepository;
 import com.example.authenticationBasedProfile.service.CustomUserDetailsService;
 
 import org.springframework.security.core.userdetails.UserDetailsService;
+import com.example.authenticationBasedProfile.infrastructure.exception.CustomAccessDeniedHandler;
 
 
 @Configuration
@@ -24,10 +25,12 @@ public class SecurityConfig {
 
     private final JwtFilter jwtFilter;
     private final UserDetailsService userDetailsService;
+    private final CustomAccessDeniedHandler accessDeniedHandler;
 
-    public SecurityConfig(JwtFilter jwtFilter,UserDetailsService userDetailsService) {
+    public SecurityConfig(JwtFilter jwtFilter,UserDetailsService userDetailsService,CustomAccessDeniedHandler accessDeniedHandler) {
         this.jwtFilter = jwtFilter;
         this.userDetailsService = userDetailsService;
+        this.accessDeniedHandler = accessDeniedHandler;
 
     }
 
@@ -58,7 +61,10 @@ public class SecurityConfig {
                 .requestMatchers("/employee").hasRole("EMPLOYEE")
                 .anyRequest().authenticated()
             )
-            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+            .exceptionHandling(exception -> exception
+                .accessDeniedHandler(accessDeniedHandler)
+            );
 
         return http.build();
     }

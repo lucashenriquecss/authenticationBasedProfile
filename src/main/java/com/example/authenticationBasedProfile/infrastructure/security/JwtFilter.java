@@ -1,6 +1,5 @@
 package com.example.authenticationBasedProfile.infrastructure.security;
 
-import com.example.authenticationBasedProfile.repository.UserRepository;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -15,16 +14,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @Component
 public class JwtFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final UserRepository userRepository;
 
-    public JwtFilter(JwtUtil jwtUtil, UserRepository userRepository) {
+    public JwtFilter(JwtUtil jwtUtil) {
         this.jwtUtil = jwtUtil;
-        this.userRepository = userRepository;
     }
 
     @Override
@@ -32,14 +32,15 @@ public class JwtFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
         String token = request.getHeader(HttpHeaders.AUTHORIZATION);
 
+        
         if (token == null || !token.startsWith("Bearer ")) {
-            chain.doFilter(request, response);
+            sendErrorResponse(response, HttpStatus.UNAUTHORIZED, "Missing or invalid Authorization header", request);
             return;
         }
-
+    
         token = token.substring(7);
         if (!jwtUtil.validateToken(token)) {
-            response.sendError(HttpStatus.UNAUTHORIZED.value(), "Invalid Token");
+            sendErrorResponse(response, HttpStatus.UNAUTHORIZED, "Invalid Token", request);
             return;
         }
 
@@ -48,11 +49,29 @@ public class JwtFilter extends OncePerRequestFilter {
         String role = jwtUtil.extractRole(token);
 
         Authentication authentication = new UsernamePasswordAuthenticationToken(email, null,
-                Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role)));
+        Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role)));
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         request.setAttribute("profileId", profileId); 
 
+       
         chain.doFilter(request, response);
+        
     }
+
+    private void sendErrorResponse(HttpServletResponse response, HttpStatus status, String message, HttpServletRequest request) throws IOException {
+    response.setStatus(status.value());
+    response.setContentType("application/json");
+    response.setCharacterEncoding("UTF-8");
+
+    Map<String, Object> body = new HashMap<>();
+    body.put("status", status.value());
+    body.put("error", status.getReasonPhrase());
+    body.put("message", message);
+    body.put("path", request.getRequestURI());
+
+    ObjectMapper objectMapper = new ObjectMapper();
+    response.getWriter().write(objectMapper.writeValueAsString(body));
+    response.getWriter().flush();
+}
 }
